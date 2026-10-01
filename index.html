@@ -256,16 +256,25 @@ function updateGains(){
 }
 
 /* ---------- Carga de medios ---------- */
+const VID_EXT = /\.(mp4|m4v|mov|webm|mkv|ogv|avi|3gp)$/i, IMG_EXT = /\.(jpe?g|png|gif|webp|bmp|avif|svg)$/i;
+function kindOf(f){
+  if(f.type.startsWith('video/')) return 'video';
+  if(f.type.startsWith('image/')) return 'image';
+  if(VID_EXT.test(f.name)) return 'video';
+  if(IMG_EXT.test(f.name)) return 'image';
+  return null;
+}
 function loadMedia(file){
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file);
-    if(file.type.startsWith('video/')){
+    const kind = kindOf(file);
+    if(kind==='video'){
       const v = document.createElement('video');
       v.src = url; v.loop = true; v.playsInline = true; v.preload = 'auto';
       v.onloadeddata = () => { v.currentTime = 0.001;
         res({kind:'video', el:v, url, name:file.name, w:v.videoWidth, h:v.videoHeight}); };
       v.onerror = () => rej(new Error('No se pudo leer el vídeo '+file.name));
-    } else if(file.type.startsWith('image/')){
+    } else if(kind==='image'){
       const im = new Image();
       im.onload = () => res({kind:'image', el:im, url, name:file.name, w:im.naturalWidth, h:im.naturalHeight});
       im.onerror = () => rej(new Error('No se pudo leer la imagen '+file.name));
@@ -294,7 +303,10 @@ function freeCell(idx){
   S.cells[idx] = null;
 }
 async function addFiles(files, start){
-  const list = [...files].filter(f => /^(image|video)\//.test(f.type));
+  const all = [...files];
+  const list = all.filter(kindOf);
+  const skipped = all.filter(f => !kindOf(f)).map(f => f.name);
+  if(skipped.length) alert('Formato no soportado: '+skipped.join(', '));
   for(let k=0;k<list.length;k++){
     const idx = (k===0 && start>=0) ? start : S.cells.findIndex((c,i) => !c && i<nVisible());
     if(idx<0) break;
@@ -479,7 +491,8 @@ function openPicker(i){ pickTarget = i; $('file').click(); }
 $('addBtn').onclick = () => openPicker(-1);
 $('replaceBtn').onclick = () => { if(S.sel>=0) openPicker(S.sel); };
 $('file').onchange = async e => {
-  const files = e.target.files; e.target.value = '';
+  const files = [...e.target.files]; // copiar ANTES de vaciar el input (la FileList es "viva")
+  e.target.value = '';
   if(files.length) await addFiles(files, pickTarget);
   pickTarget = -1;
 };
